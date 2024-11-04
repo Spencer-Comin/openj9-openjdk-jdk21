@@ -1621,7 +1621,7 @@ public final class String
 				decompress(s.value, 0, value, 0, slen);
 			} else {
 				decompressedArrayCopy(s.value, 0, value, 0, slen);
-			}		
+			}
 
 			helpers.putCharInArrayByIndex(value, slen, c);
 
@@ -3117,16 +3117,25 @@ public final class String
      * @return  a hash code value for this object.
      */
     public int hashCode() {
-		if (hash == 0 && value.length > 0) {
-			// Check if the String is compressed
-			if (COMPACT_STRINGS && (compressionFlag == null || coder == LATIN1)) {
-				hash = hashCodeImplCompressed(value, 0, lengthInternal());
-			} else {
-				hash = hashCodeImplDecompressed(value, 0, lengthInternal());
-			}
-		}
-
-		return hash;
+        // The hash or hashIsZero fields are subject to a benign data race,
+        // making it crucial to ensure that any observable result of the
+        // calculation in this method stays correct under any possible read of
+        // these fields. Necessary restrictions to allow this to be correct
+        // without explicit memory fences or similar concurrency primitives is
+        // that we can ever only write to one of these two fields for a given
+        // String instance, and that the computation is idempotent and derived
+        // from immutable state
+        int h = hash;
+        if (h == 0 && !hashIsZero) {
+            h = isLatin1() ? StringLatin1.hashCode(value)
+                           : StringUTF16.hashCode(value);
+            if (h == 0) {
+                hashIsZero = true;
+            } else {
+                hash = h;
+            }
+        }
+        return h;
     }
 
 	private static int hashCodeImplCompressed(byte[] value, int offset, int count) {
